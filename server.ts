@@ -12,8 +12,6 @@ dotenv.config({ path: envPath });
 const MODEL_PREFERENCE = [
   "gemini-2.5-flash",
   "gemini-2.5-pro",
-  "gemini-2.0-flash",
-  "gemini-2.0-flash-lite",
 ];
 
 // Per-model quota exhaustion cache: tracks when each model's quota expires
@@ -225,10 +223,8 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
   app.get("/api/models", (_req, res) => {
     res.json({
       models: [
-        { id: "gemini-2.5-flash",      label: "Gemini 2.5 Flash",      description: "Latest balanced — best availability" },
-        { id: "gemini-2.5-pro",        label: "Gemini 2.5 Pro",        description: "Most capable, slower" },
-        { id: "gemini-2.0-flash",      label: "Gemini 2.0 Flash",      description: "Fast, efficient — ideal for chat" },
-        { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite", description: "Lightest & fastest responses" },
+        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Latest balanced — best availability" },
+        { id: "gemini-2.5-pro",   label: "Gemini 2.5 Pro",   description: "Most capable, slower" },
       ],
     });
   });
