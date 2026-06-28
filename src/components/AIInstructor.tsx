@@ -755,10 +755,15 @@ User query: ${textToSend}`;
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="p-3 bg-rose-950/20 border border-rose-500/20 text-rose-300 rounded-xl text-[10.5px] leading-relaxed text-center font-medium"
+              className="p-3 bg-rose-950/20 border border-rose-500/20 text-rose-300 rounded-xl text-[10.5px] leading-relaxed font-medium"
             >
-              ⚠️ {apiError}
-              <button 
+              <p className="text-center mb-1">⚠️ {apiError}</p>
+              {apiError.toLowerCase().includes("quota") && (
+                <p className="text-center text-[9px] text-rose-400/70 mt-1">
+                  Switch models in the selector above — Flash Lite uses a separate quota.
+                </p>
+              )}
+              <button
                 onClick={() => handleSendMessage(messages[messages.length - 1]?.text || "Retry advice")}
                 className="block mx-auto mt-2 text-[10px] font-bold underline hover:text-rose-200 cursor-pointer"
               >

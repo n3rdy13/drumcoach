@@ -74,7 +74,25 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
       res.json({ reply: replyText });
     } catch (error: any) {
       console.error("AI Instructor Chat Error:", error);
-      res.status(500).json({ error: error.message || "Something went wrong in the AI training session." });
+
+      // Parse quota/rate-limit errors from the Gemini API and surface a clear message
+      const rawMsg: string = error.message || "";
+      let userMessage = "Something went wrong in the AI training session.";
+
+      if (error.status === 429 || rawMsg.includes("RESOURCE_EXHAUSTED") || rawMsg.includes("quota")) {
+        // Extract retry delay if present
+        const retryMatch = rawMsg.match(/retry in (\d+(?:\.\d+)?s)/i);
+        const retryHint = retryMatch ? ` (retry in ${retryMatch[1]})` : "";
+        userMessage = `Gemini API quota exceeded${retryHint}. The free-tier request limit has been reached. Please wait a moment and try again, or upgrade your Google AI Studio plan at https://ai.google.dev.`;
+      } else if (rawMsg.includes("API_KEY_INVALID") || rawMsg.includes("invalid api key")) {
+        userMessage = "The Gemini API key is invalid. Please check the GEMINI_API_KEY value in your .env file.";
+      } else if (rawMsg.includes("MODEL_NOT_FOUND") || rawMsg.includes("not found")) {
+        userMessage = `The selected model is not available. Try switching to Gemini 2.0 Flash in the model selector.`;
+      } else if (rawMsg) {
+        userMessage = rawMsg;
+      }
+
+      res.status(error.status === 429 ? 429 : 500).json({ error: userMessage });
     }
   });
 
