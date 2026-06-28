@@ -14,20 +14,17 @@ import { DynamicsDrill } from './components/DynamicsDrill';
 import { ChartIngestion } from './components/ChartIngestion';
 import { LimbIndependence } from './components/LimbIndependence';
 import { DrumLessons } from './components/DrumLessons';
-import { 
-  Drum, 
-  Music, 
-  Flame, 
-  Award, 
-  BookOpen, 
-  Volume2, 
-  ShieldCheck, 
-  TrendingUp, 
-  Sparkles, 
-  Trophy, 
-  Sliders, 
-  Activity, 
-  Upload 
+import { AchievementDrawer } from './components/AchievementDrawer';
+import { OnboardingTour, shouldShowTour } from './components/OnboardingTour';
+import {
+  Drum,
+  Music,
+  Award,
+  ShieldCheck,
+  TrendingUp,
+  Sparkles,
+  Trophy,
+  Upload
 } from 'lucide-react';
 
 export default function App() {
@@ -67,6 +64,13 @@ export default function App() {
   const [timingHistory, setTimingHistory] = useState<{ id: string; offset: number; type: 'kick' | 'snare' | 'hihat'; rating: 'Perfect' | 'Good' | 'Early' | 'Late' }[]>([]);
   const [importedPattern, setImportedPattern] = useState<PracticePattern | null>(null);
 
+  // Achievement drawer + badge tracking
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
+
+  // Onboarding tour — show only on first visit
+  const [showTour, setShowTour] = useState(() => shouldShowTour());
+
   const {
     isSupported,
     permissionState,
@@ -89,7 +93,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#060608] text-slate-100 flex flex-col antialiased selection:bg-emerald-500/35 selection:text-emerald-100">
-      
+
+      {/* Onboarding Tour overlay */}
+      {showTour && <OnboardingTour onFinish={() => setShowTour(false)} />}
+
+      {/* Achievement Drawer */}
+      <AchievementDrawer
+        isOpen={showAchievements}
+        onClose={() => setShowAchievements(false)}
+        completedLessonIds={completedLessonIds}
+      />
+
       {/* Upper Navigation / Decorative Header Banner */}
       <header className="border-b border-slate-900 bg-[#0A0A0C]/90 sticky top-0 backdrop-blur-md z-10">
         <div className="max-w-6xl mx-auto px-4 py-4.5 flex items-center justify-between">
@@ -99,17 +113,33 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-sans text-sm font-bold tracking-tight text-white flex items-center gap-1.5 leading-none">
-                Drum Coach <span className="text-[9px] bg-emerald-500/10 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/10">v1.1</span>
+                Drum Coach <span className="text-[9px] bg-emerald-500/10 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/10">v2.0</span>
               </h1>
               <span className="text-[10px] font-sans font-medium text-slate-500 tracking-wide">Rhythmic timing & rudiment accelerator</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-semibold text-slate-450">
+          <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1.5 bg-[#0F0F11] px-3.5 py-1.5 rounded-xl border border-slate-900">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
               <span className="font-sans text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">Web Audio Clock</span>
             </div>
+
+            {/* Achievements button */}
+            <button
+              id="achievements-header-btn"
+              onClick={() => setShowAchievements(true)}
+              className="flex items-center gap-1.5 bg-[#0F0F11] px-3 py-1.5 rounded-xl border border-slate-900 hover:border-amber-900/50 hover:bg-amber-950/10 transition-all cursor-pointer group"
+              title="View Achievements & Badges"
+            >
+              <Trophy className="h-3.5 w-3.5 text-amber-500 group-hover:text-amber-400 transition-colors" />
+              {completedLessonIds.length > 0 && (
+                <span className="font-mono text-[9px] font-bold text-amber-400">{completedLessonIds.length}</span>
+              )}
+              <span className="hidden sm:block font-sans text-[10px] text-slate-400 uppercase tracking-wider font-bold group-hover:text-slate-300 transition-colors">
+                Achievements
+              </span>
+            </button>
           </div>
         </div>
       </header>
@@ -262,6 +292,7 @@ export default function App() {
                 setDivision={setDivision}
                 setBeatsPerMeasure={setBeatsPerMeasure}
                 togglePlayback={togglePlayback}
+                onCompletedLessonsChange={setCompletedLessonIds}
               />
             ) : (
               <RudimentCoach
