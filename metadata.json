@@ -1,0 +1,6 @@
+{
+  "name": "Drum Learning App",
+  "description": "A web-based drum learning app with precise metronome, bpm control, visual feed, and interactive drum rudiment practice engines.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
