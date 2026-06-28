@@ -249,6 +249,9 @@ Provide a supportive, high-fidelity critique. Tell me exactly what physical adju
           history: [],
         }),
       });
+      if (!response.headers.get('content-type')?.includes('application/json')) {
+        throw new Error("Server returned an unexpected response — please try again.");
+      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to fetch critique.');
       setAiCritique(data.reply);

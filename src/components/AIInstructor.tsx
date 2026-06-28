@@ -158,8 +158,11 @@ export function AIInstructor({
   // Fetch available models from server
   useEffect(() => {
     fetch("/api/models")
-      .then(r => r.json())
-      .then(d => { if (d.models?.length) setAvailableModels(d.models); })
+      .then(r => {
+        if (!r.ok || !r.headers.get('content-type')?.includes('application/json')) return null;
+        return r.json();
+      })
+      .then(d => { if (d?.models?.length) setAvailableModels(d.models); })
       .catch(() => {});
   }, []);
 
@@ -167,8 +170,11 @@ export function AIInstructor({
   useEffect(() => {
     const fetchStatus = () => {
       fetch("/api/models/status")
-        .then(r => r.json())
-        .then(d => { if (d.status) setModelStatus(d.status); })
+        .then(r => {
+          if (!r.ok || !r.headers.get('content-type')?.includes('application/json')) return null;
+          return r.json();
+        })
+        .then(d => { if (d?.status) setModelStatus(d.status); })
         .catch(() => {});
     };
     fetchStatus();
@@ -289,6 +295,9 @@ Structure the routine into 2 or 3 exercises (totaling 5 minutes) using standard 
         })
       });
 
+      if (!response.headers.get('content-type')?.includes('application/json')) {
+        throw new Error("Server returned an unexpected response. The API may still be starting up — please try again.");
+      }
       const data = await response.json();
 
       if (!response.ok) {
@@ -428,6 +437,9 @@ User query: ${textToSend}`;
         })
       });
 
+      if (!response.headers.get('content-type')?.includes('application/json')) {
+        throw new Error("Server returned an unexpected response. The API may still be starting up — please try again.");
+      }
       const data = await response.json();
 
       if (!response.ok) {
