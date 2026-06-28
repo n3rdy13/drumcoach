@@ -29,12 +29,19 @@ export interface ChatMessage {
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
+  modelUsed?: string;
 }
 
 interface GeminiModel {
   id: string;
   label: string;
   description: string;
+}
+
+interface ModelStatus {
+  id: string;
+  exhausted: boolean;
+  retryInMs: number;
 }
 
 interface AIInstructorProps {
@@ -97,12 +104,13 @@ export function AIInstructor({
   const [weeklyTrends, setWeeklyTrends] = useState<WeeklyTrend[]>([]);
   const [showTrends, setShowTrends] = useState(false);
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([
-    { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", description: "Fast, efficient — ideal for chat" },
+    { id: "gemini-2.5-pro",        label: "Gemini 2.5 Pro",        description: "Most capable, slower" },
+    { id: "gemini-2.5-flash",      label: "Gemini 2.5 Flash",      description: "Latest balanced model" },
+    { id: "gemini-2.0-flash",      label: "Gemini 2.0 Flash",      description: "Fast, efficient — ideal for chat" },
     { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite", description: "Lightest & fastest responses" },
-    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Latest balanced model" },
-    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Most capable, slower" },
   ]);
   const [selectedModel, setSelectedModel] = useState("gemini-2.0-flash");
+  const [modelStatus, setModelStatus] = useState<ModelStatus[]>([]);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const modelPickerRef = useRef<HTMLDivElement>(null);
@@ -155,6 +163,19 @@ export function AIInstructor({
       .then(r => r.json())
       .then(d => { if (d.models?.length) setAvailableModels(d.models); })
       .catch(() => {});
+  }, []);
+
+  // Poll model quota status every 15 seconds
+  useEffect(() => {
+    const fetchStatus = () => {
+      fetch("/api/models/status")
+        .then(r => r.json())
+        .then(d => { if (d.status) setModelStatus(d.status); })
+        .catch(() => {});
+    };
+    fetchStatus();
+    const id = setInterval(fetchStatus, 15_000);
+    return () => clearInterval(id);
   }, []);
 
   // Close model picker on outside click
@@ -276,11 +297,11 @@ Structure the routine into 2 or 3 exercises (totaling 5 minutes) using standard 
         throw new Error(data.error || "An API Error occurred during generation.");
       }
 
-      const aiReplyText = data.reply;
       const aiMsg: ChatMessage = {
         id: Math.random().toString(36).substring(2, 9),
         sender: 'ai',
-        text: aiReplyText,
+        text: data.reply,
+        modelUsed: data.modelUsed,
         timestamp: new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' })
       };
 
@@ -415,11 +436,11 @@ User query: ${textToSend}`;
         throw new Error(data.error || "An API Error occurred during generation.");
       }
 
-      const aiReplyText = data.reply;
       const aiMsg: ChatMessage = {
         id: Math.random().toString(36).substring(2, 9),
         sender: 'ai',
-        text: aiReplyText,
+        text: data.reply,
+        modelUsed: data.modelUsed,
         timestamp: new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' })
       };
 
@@ -528,32 +549,55 @@ User query: ${textToSend}`;
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.97 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-9 z-50 bg-[#0F0F11] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden min-w-[220px]"
+                  className="absolute right-0 top-9 z-50 bg-[#0F0F11] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden min-w-[240px]"
                 >
-                  <div className="px-3 py-2 border-b border-slate-900">
+                  <div className="px-3 py-2 border-b border-slate-900 flex items-center justify-between">
                     <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-500">Select AI Model</p>
+                    <p className="text-[8px] font-mono text-slate-600">auto-fallback enabled</p>
                   </div>
-                  {availableModels.map(model => (
-                    <button
-                      key={model.id}
-                      onClick={() => { setSelectedModel(model.id); setModelPickerOpen(false); }}
-                      className={`w-full flex items-start gap-2.5 px-3 py-2.5 hover:bg-slate-900/60 transition-colors cursor-pointer text-left ${
-                        selectedModel === model.id ? 'bg-indigo-950/20' : ''
-                      }`}
-                    >
-                      <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                        selectedModel === model.id ? 'border-indigo-400 bg-indigo-500/20' : 'border-slate-700'
-                      }`}>
-                        {selectedModel === model.id && <div className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
-                      </div>
-                      <div>
-                        <p className={`text-[11px] font-bold font-sans ${selectedModel === model.id ? 'text-indigo-300' : 'text-slate-300'}`}>
-                          {model.label}
-                        </p>
-                        <p className="text-[9px] text-slate-600 font-mono">{model.description}</p>
-                      </div>
-                    </button>
-                  ))}
+                  {availableModels.map(model => {
+                    const status = modelStatus.find(s => s.id === model.id);
+                    const exhausted = status?.exhausted ?? false;
+                    const retryS = exhausted && status ? Math.ceil(status.retryInMs / 1000) : 0;
+                    return (
+                      <button
+                        key={model.id}
+                        onClick={() => { setSelectedModel(model.id); setModelPickerOpen(false); }}
+                        className={`w-full flex items-start gap-2.5 px-3 py-2.5 hover:bg-slate-900/60 transition-colors cursor-pointer text-left ${
+                          selectedModel === model.id ? 'bg-indigo-950/20' : ''
+                        }`}
+                      >
+                        <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                          selectedModel === model.id ? 'border-indigo-400 bg-indigo-500/20' : 'border-slate-700'
+                        }`}>
+                          {selectedModel === model.id && <div className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className={`text-[11px] font-bold font-sans ${
+                              exhausted ? 'text-slate-600' : selectedModel === model.id ? 'text-indigo-300' : 'text-slate-300'
+                            }`}>
+                              {model.label}
+                            </p>
+                            {exhausted && (
+                              <span className="text-[8px] font-mono bg-amber-950/40 border border-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded-full">
+                                quota {retryS > 0 ? `~${retryS}s` : 'wait'}
+                              </span>
+                            )}
+                            {!exhausted && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" title="Available" />
+                            )}
+                          </div>
+                          <p className="text-[9px] text-slate-600 font-mono">{model.description}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  <div className="px-3 py-2 border-t border-slate-900">
+                    <p className="text-[8px] font-mono text-slate-600 leading-relaxed">
+                      If your preferred model hits quota, the server automatically tries the next available one.
+                    </p>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -691,9 +735,21 @@ User query: ${textToSend}`;
                         </>
                       )}
                     </span>
-                    <span className="text-[8px] font-bold text-slate-600 font-mono">
-                      {msg.timestamp}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {msg.sender === 'ai' && msg.modelUsed && (
+                        <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded-full border ${
+                          msg.modelUsed !== selectedModel
+                            ? 'bg-amber-950/30 border-amber-500/20 text-amber-500'
+                            : 'bg-indigo-950/30 border-indigo-500/15 text-indigo-500'
+                        }`}>
+                          {msg.modelUsed.replace('gemini-', 'g-')}
+                          {msg.modelUsed !== selectedModel && ' (auto)'}
+                        </span>
+                      )}
+                      <span className="text-[8px] font-bold text-slate-600 font-mono">
+                        {msg.timestamp}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Body Text */}
