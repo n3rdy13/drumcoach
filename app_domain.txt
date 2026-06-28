@@ -1,0 +1,16 @@
+# MetroMe Drumming App Architecture & Physics
+
+## 1. File Structure
+- `/src/App.tsx`: Main application file. Houses core states for metronome tempo (BPM), play/pause, subdivision division, custom MIDI patterns, and the `timingHistory` array.
+- `/src/components/DrumLessons.tsx`: Houses the Virtual Lesson Center and the syllabus of lessons. Tracks user hit streaks, verifies alignments, and queries Coach Dave's AI critiques.
+- `/src/components/AIInstructor.tsx`: Contains the side-chat interface with Coach Dave and holds the "AI Warm-up Generator" button.
+- `/src/components/PracticeMode.tsx`: The primary practice workspace that handles the canvas timeline, metronome ticks, audio context synth loops, and detects hit delays.
+- `/src/data/rudiments.ts`: Static dataset of standard stick rudiments (Single stroke, double stroke, paradiddle patterns).
+
+## 2. Dynamic Live Timing Analytics & Physics
+When a user practices, hits are registered relative to the closest metronome grid division.
+- `offset`: Measured in milliseconds (`ms`). 
+  - A negative offset (e.g., `-15ms`) means the hit was **EARLY** (the student is rushing).
+  - A positive offset (e.g., `+18ms`) means the hit was **LATE** (the student is dragging).
+- `jitter` (Standard Deviation of absolute offsets): Reflects the user's timing consistency. High jitter means highly erratic timing. Low jitter means a deep, steady pocket.
+- `focusInstrument`: Lessons focus on either the **KICK**, **SNARE**, or **HI-HAT** pads.

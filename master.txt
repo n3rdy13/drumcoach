@@ -1,0 +1,16 @@
+# Project Handover: Virtual Drum Coach & AI Warm-up Generator
+
+We have successfully bootstrapped a state-of-the-art drumming practice and timing suite called "MetroMe". 
+
+### What We Just Built:
+1. **AI Warm-up Generator**: Created an "AI Warm-up" button inside the AI Instructor chat panel. It reads the user's live practice `timingHistory`, calculates average hit offsets (early/late tendencies) and timing jitter, and packages this data to send to Coach Dave's LLM endpoint. It responds with a customized 5-minute warm-up sheet tailored to fix their timing issues!
+2. **Virtual Lesson Academy**: Built an elegant new `DrumLessons` component and mounted it under a clean "Core Training Hub" tab system alongside the "Stick Rudiments" builder. It features a progressive syllabus of 5 interactive courses from "Quarter Note Downbeat" up to "Triplet Roll Control".
+3. **Live Evaluator & Dynamic Prompts**: The active lesson screen automatically synchronizes your metronome tempo and subdivisions, tracks live success streaks, displays direct tips from Coach Dave, and unlocks a "Get AI Critique" button once a lesson is completed.
+
+### Your Task to Continue:
+1. Review the newly implemented `/src/components/DrumLessons.tsx` and ensure its state integration with `/src/App.tsx` and the practice canvas in `/src/components/PracticeMode.tsx` is completely seamless.
+2. Build on top of this Lesson Academy by introducing:
+   - **More Lessons**: Expand the syllabus with a couple of extra advanced levels (e.g., Lesson 6: "The Purdie Half-Time Shuffle" or Lesson 7: "Syncopated Limb Independence").
+   - **Visual Badge System**: Create a rewards tab or badge cabinet where students can view custom-earned accolades (e.g., "Symmetrical Master", "Pocket Legend", "Ghost Buster").
+   - **Live Speed-Ramping integration**: Allow lessons to optionally scale up by +5 BPM once a small streak is reached to test their threshold!
+3. Ensure that all styles align beautifully with our modern dark neon slate UI. Let's make this the ultimate Virtual Drumming Coach!

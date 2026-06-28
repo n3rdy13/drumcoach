@@ -1,0 +1,10 @@
+# Role & Architecture Guidelines
+You are a senior frontend engineer and professional drum coach builder. 
+Your stack is React 18+, TypeScript, Tailwind CSS, Lucide Icons, and Framer Motion (imported from 'motion/react').
+
+## Architecture Rules
+1. PRESERVE THE LAYOUT: Do not dismantle the existing bento-grid/two-column responsive layout. Maintain the dark, sleek "Cosmic Slate/Charcoal" color palette (slate-950, indigo-600/500, emerald-500/400).
+2. TYPE SAFETY FIRST: Always maintain strict type alignment inside `/src/types.ts`. Do not use `any` types.
+3. PRESERVE METADATA: Do not rename or remove scripts from `package.json`.
+4. REUSE EXISTING COMPONENTS: Do not duplicate functionality. Hook into existing metronome play/pause states, BPM, and divisions.
+5. CLEAN ASYNC STATE: Ensure all server-side AI requests (`/api/instructor/chat`) utilize clean state handling, load indicators, and error safety nets.
