@@ -103,11 +103,15 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Express server running on http://localhost:${PORT}`);
+  return new Promise<void>((resolve) => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Express server running on http://localhost:${PORT}`);
+      resolve();
+    });
   });
 }
 
-startServer().catch((err) => {
+await startServer().catch((err) => {
   console.error("Failed to start fullstack server:", err);
+  process.exit(1);
 });
