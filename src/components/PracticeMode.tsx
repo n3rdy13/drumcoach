@@ -1,21 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Keyboard, 
-  Sparkles, 
-  Eye, 
-  HelpCircle, 
-  Play, 
-  Layers, 
-  VolumeX, 
-  Volume2, 
-  Activity, 
-  RotateCcw,
-  Clock,
-  Zap,
-  Gauge,
-  Target
-} from 'lucide-react';
+import { Keyboard, Sparkles, Eye, Circle as HelpCircle, Play, Layers, VolumeX, Volume2, Activity, RotateCcw, Clock, Zap, Gauge, Target } from 'lucide-react';
 import { BeatDivision } from '../types';
 
 interface PracticeModeProps {
@@ -34,6 +19,7 @@ interface PracticeModeProps {
   externalVisualTrigger?: { instrument: 'kick' | 'snare' | 'hihat'; timestamp: number } | null;
   onHistoryUpdated?: (history: { id: string; offset: number; type: 'kick' | 'snare' | 'hihat'; rating: 'Perfect' | 'Good' | 'Early' | 'Late' }[]) => void;
   importedPattern?: PracticePattern | null;
+  latencyOffsetMs?: number;
 }
 
 export interface PracticePattern {
@@ -121,7 +107,8 @@ export function PracticeMode({
   togglePlayback,
   externalVisualTrigger,
   onHistoryUpdated,
-  importedPattern
+  importedPattern,
+  latencyOffsetMs = 0,
 }: PracticeModeProps) {
   const [selectedPattern, setSelectedPattern] = useState<PracticePattern>(PRACTICE_PATTERNS[0]);
 
@@ -160,7 +147,9 @@ export function PracticeMode({
   const recordTimingOffset = useCallback((type: 'kick' | 'snare' | 'hihat') => {
     if (!isPlaying) return null;
 
-    const now = performance.now();
+    // Apply latency compensation: subtract the hardware offset so the timing window
+    // centers on the actual intended hit time rather than the raw event time.
+    const now = performance.now() - latencyOffsetMs;
     const elapsedSinceStepStart = now - lastStepTimestampRef.current;
     const stepDurationMs = ((60 / bpm) / division) * 1000;
 
@@ -210,7 +199,7 @@ export function PracticeMode({
     }
 
     return { offset, rating };
-  }, [isPlaying, bpm, division]);
+  }, [isPlaying, bpm, division, latencyOffsetMs]);
 
   // Trigger drum sounds locally and add to logging console
   const playKickLocally = useCallback(() => {

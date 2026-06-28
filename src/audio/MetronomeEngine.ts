@@ -11,9 +11,24 @@ export class MetronomeEngine {
   public soundType: SoundType = 'synth';
   public volume: number = 0.8;
 
+  // Global latency offset applied to outgoing beat timestamps (ms).
+  // Positive means user consistently hits late; the offset corrects the comparison window.
+  public latencyOffsetMs: number = 0;
+
   // Active drum pattern playback settings
   public activePattern: DrumPattern | null = null;
   public muteMetronomeClick: boolean = false;
+
+  // Returns the AudioContext's current time in seconds for external latency calculation.
+  public getAudioContextTime(): number {
+    return this.audioContext ? this.audioContext.currentTime : 0;
+  }
+
+  // Returns the browser's reported hardware output latency in ms.
+  public getBaseLatencyMs(): number {
+    if (!this.audioContext) return 0;
+    return ((this.audioContext as any).baseLatency ?? 0) * 1000;
+  }
 
   // Scheduler tracking
   private nextNoteTime: number = 0.0;
@@ -41,13 +56,18 @@ export class MetronomeEngine {
    */
   public init() {
     if (!this.audioContext) {
-      // Use window.AudioContext or webkitAudioContext for safety across browsers
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      this.audioContext = new AudioCtx();
+      try {
+        this.audioContext = new AudioCtx();
+      } catch (err) {
+        console.warn('AudioContext creation failed — user gesture may be required:', err);
+        return;
+      }
     }
 
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+    // Always resume: handles suspended state on mobile and after user-gesture requirement
+    if (this.audioContext.state !== 'running') {
+      this.audioContext.resume().catch(() => {});
     }
   }
 

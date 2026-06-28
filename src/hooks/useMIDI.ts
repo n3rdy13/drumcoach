@@ -19,87 +19,99 @@ export interface MidiDevice {
 
 export type MidiLearningInstrument = 'kick' | 'snare' | 'hihat' | null;
 
+export interface RawMidiHit {
+  note: number;
+  velocity: number;
+  performanceNowMs: number;
+}
+
 interface UseMIDIOptions {
   triggerKick: () => void;
   triggerSnare: () => void;
   triggerHiHat: () => void;
   onVisualTrigger?: (instrument: 'kick' | 'snare' | 'hihat', velocity: number) => void;
+  onRawHit?: (hit: RawMidiHit) => void;
+  velocityThreshold?: number;
 }
 
-export function useMIDI({ triggerKick, triggerSnare, triggerHiHat, onVisualTrigger }: UseMIDIOptions) {
+export function useMIDI({ triggerKick, triggerSnare, triggerHiHat, onVisualTrigger, onRawHit, velocityThreshold }: UseMIDIOptions) {
   const [isSupported, setIsSupported] = useState(false);
   const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied' | 'requesting'>('prompt');
   const [devices, setDevices] = useState<MidiDevice[]>([]);
   const [midiLogs, setMidiLogs] = useState<MidiLog[]>([]);
   const [learningInstrument, setLearningInstrument] = useState<MidiLearningInstrument>(null);
 
-  // Mappings: Note Number -> Instrument
   const [mappings, setMappings] = useState({
-    kick: 36,  // Bass Drum 1
-    snare: 38, // Acoustic Snare
-    hihat: 42, // Closed Hi-Hat
+    kick: 36,
+    snare: 38,
+    hihat: 42,
   });
 
-  // Keep references to prevent recreating event listeners on mapping change
   const mappingsRef = useRef(mappings);
   const learningRef = useRef(learningInstrument);
+  const velocityThresholdRef = useRef(velocityThreshold);
 
   const triggerKickRef = useRef(triggerKick);
   const triggerSnareRef = useRef(triggerSnare);
   const triggerHiHatRef = useRef(triggerHiHat);
   const onVisualTriggerRef = useRef(onVisualTrigger);
+  const onRawHitRef = useRef(onRawHit);
 
-  useEffect(() => {
-    mappingsRef.current = mappings;
-  }, [mappings]);
-
-  useEffect(() => {
-    learningRef.current = learningInstrument;
-  }, [learningInstrument]);
+  useEffect(() => { mappingsRef.current = mappings; }, [mappings]);
+  useEffect(() => { learningRef.current = learningInstrument; }, [learningInstrument]);
+  useEffect(() => { velocityThresholdRef.current = velocityThreshold; }, [velocityThreshold]);
 
   useEffect(() => {
     triggerKickRef.current = triggerKick;
     triggerSnareRef.current = triggerSnare;
     triggerHiHatRef.current = triggerHiHat;
     onVisualTriggerRef.current = onVisualTrigger;
-  }, [triggerKick, triggerSnare, triggerHiHat, onVisualTrigger]);
+    onRawHitRef.current = onRawHit;
+  }, [triggerKick, triggerSnare, triggerHiHat, onVisualTrigger, onRawHit]);
 
-  // Handle incoming MIDI messages
   const handleMidiMessage = useCallback((deviceName: string, ev: any) => {
     if (!ev || !ev.data || ev.data.length < 2) return;
     const [status, note, velocity = 0] = ev.data;
-    
-    // Command is the first 4 bits of status
+
     const command = status & 0xF0;
-    
-    // We only care about Note On messages (0x90).
-    // Note On with velocity 0 is also treated as Note Off.
+
     if (command === 0x90 && velocity > 0) {
+      const hitTimestamp = performance.now();
+
+      // Notify calibration wizards with the raw hit before any instrument classification
+      if (onRawHitRef.current) {
+        onRawHitRef.current({ note, velocity, performanceNowMs: hitTimestamp });
+      }
+
       let matched: 'kick' | 'snare' | 'hihat' | 'unmapped' = 'unmapped';
-      
+
       const currentLearning = learningRef.current;
       const currentMappings = mappingsRef.current;
+      const threshold = velocityThresholdRef.current;
 
-      // If learning is active, bind this note to the active learning instrument
       if (currentLearning) {
-        setMappings(prev => ({
-          ...prev,
-          [currentLearning]: note
-        }));
+        setMappings(prev => ({ ...prev, [currentLearning]: note }));
         setLearningInstrument(null);
         matched = currentLearning;
       } else {
-        // Evaluate normal mappings
         if (note === currentMappings.kick) {
           matched = 'kick';
         } else if (note === currentMappings.snare) {
-          matched = 'snare';
+          // When snare/hihat share the same note number, use velocity to disambiguate
+          if (threshold !== undefined && velocity < threshold) {
+            matched = 'hihat';
+          } else {
+            matched = 'snare';
+          }
         } else if (note === currentMappings.hihat) {
-          matched = 'hihat';
+          if (threshold !== undefined && velocity >= threshold) {
+            matched = 'snare';
+          } else {
+            matched = 'hihat';
+          }
         }
       }
 
-      // Execute appropriate audio synth triggers
       if (matched === 'kick') {
         triggerKickRef.current();
         if (onVisualTriggerRef.current) onVisualTriggerRef.current('kick', velocity);
@@ -111,9 +123,8 @@ export function useMIDI({ triggerKick, triggerSnare, triggerHiHat, onVisualTrigg
         if (onVisualTriggerRef.current) onVisualTriggerRef.current('hihat', velocity);
       }
 
-      // Add a clean visual entry inside the log console
       const timestamp = new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' }) + '.' + String(new Date().getMilliseconds()).padStart(3, '0');
-      
+
       const newLog: MidiLog = {
         id: Math.random().toString(36).substring(2, 9),
         time: timestamp,
@@ -127,7 +138,6 @@ export function useMIDI({ triggerKick, triggerSnare, triggerHiHat, onVisualTrigg
     }
   }, []);
 
-  // Request MIDI Permission & Poll inputs
   const requestMidiAccess = useCallback(async () => {
     if (typeof window === 'undefined' || !navigator || !('requestMIDIAccess' in navigator)) {
       setIsSupported(false);
@@ -144,8 +154,7 @@ export function useMIDI({ triggerKick, triggerSnare, triggerHiHat, onVisualTrigg
 
       const updateDevicesAndSetupListeners = () => {
         const inputs = Array.from(midiAccess.inputs.values());
-        
-        // Map elements
+
         const mappedDevices: MidiDevice[] = inputs.map((input: any) => ({
           id: input.id,
           name: input.name || 'MIDI Controller',
@@ -153,32 +162,25 @@ export function useMIDI({ triggerKick, triggerSnare, triggerHiHat, onVisualTrigg
           state: input.state || 'connected',
           connection: input.connection || 'open',
         }));
-        
+
         setDevices(mappedDevices);
 
-        // Bind callback listener on each midi input port
         inputs.forEach((input: any) => {
           input.onmidimessage = (ev: any) => handleMidiMessage(input.name, ev);
         });
       };
 
-      // Initial read and register listener updates
       updateDevicesAndSetupListeners();
-      midiAccess.onstatechange = () => {
-        updateDevicesAndSetupListeners();
-      };
-
+      midiAccess.onstatechange = () => { updateDevicesAndSetupListeners(); };
     } catch (err) {
       console.error('MIDI Access Request Failed:', err);
       setPermissionState('denied');
     }
   }, [handleMidiMessage]);
 
-  // Auto-initiate Web MIDI scanning silently if API is present
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator && ('requestMIDIAccess' in navigator)) {
       setIsSupported(true);
-      // Attempt silent request to capture permissions securely
       navigator.requestMIDIAccess()
         .then(access => {
           setPermissionState('granted');
@@ -191,7 +193,7 @@ export function useMIDI({ triggerKick, triggerSnare, triggerHiHat, onVisualTrigg
             connection: input.connection || 'open',
           }));
           setDevices(mappedDevices);
-          
+
           inputs.forEach((input: any) => {
             input.onmidimessage = (ev: any) => handleMidiMessage(input.name, ev);
           });
@@ -210,24 +212,16 @@ export function useMIDI({ triggerKick, triggerSnare, triggerHiHat, onVisualTrigg
             });
           };
         })
-        .catch(() => {
-          setPermissionState('prompt');
-        });
+        .catch(() => { setPermissionState('prompt'); });
     } else {
       setIsSupported(false);
     }
   }, [handleMidiMessage]);
 
-  const clearLogs = useCallback(() => {
-    setMidiLogs([]);
-  }, []);
+  const clearLogs = useCallback(() => { setMidiLogs([]); }, []);
 
   const resetMappingsToDefault = useCallback(() => {
-    setMappings({
-      kick: 36,
-      snare: 38,
-      hihat: 42
-    });
+    setMappings({ kick: 36, snare: 38, hihat: 42 });
   }, []);
 
   return {

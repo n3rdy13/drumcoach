@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMetronome } from './hooks/useMetronome';
 import { VisualBeats } from './components/VisualBeats';
 import { MetronomeController } from './components/MetronomeController';
@@ -16,6 +16,9 @@ import { LimbIndependence } from './components/LimbIndependence';
 import { DrumLessons } from './components/DrumLessons';
 import { AchievementDrawer } from './components/AchievementDrawer';
 import { OnboardingTour, shouldShowTour } from './components/OnboardingTour';
+import { LatencyCalibrationWizard, loadLatencyOffset } from './components/LatencyCalibrationWizard';
+import { MidiThresholdWizard, loadVelocityThreshold } from './components/MidiThresholdWizard';
+import type { RawMidiHit } from './hooks/useMIDI';
 import {
   Drum,
   Music,
@@ -57,6 +60,7 @@ export default function App() {
   } = useMetronome();
 
   const [externalVisualTrigger, setExternalVisualTrigger] = useState<{ instrument: 'kick' | 'snare' | 'hihat'; timestamp: number; velocity?: number } | null>(null);
+  const [latestRawHit, setLatestRawHit] = useState<RawMidiHit | null>(null);
 
   // Advanced feature tab state, timing analytics buffer, and imported custom midi chart
   const [activeAdvancedTab, setActiveAdvancedTab] = useState<'stems' | 'analytics' | 'dynamics' | 'ingestion' | 'independence'>('stems');
@@ -71,6 +75,20 @@ export default function App() {
   // Onboarding tour — show only on first visit
   const [showTour, setShowTour] = useState(() => shouldShowTour());
 
+  // Latency calibration state — loaded from Supabase on mount
+  const [latencyOffsetMs, setLatencyOffsetMs] = useState(0);
+  const [showLatencyWizard, setShowLatencyWizard] = useState(false);
+
+  // Velocity threshold state — loaded from Supabase on mount
+  const [velocityThreshold, setVelocityThreshold] = useState<number | undefined>(undefined);
+  const [showThresholdWizard, setShowThresholdWizard] = useState(false);
+
+  // Load persisted calibration settings on mount
+  useEffect(() => {
+    loadLatencyOffset().then(setLatencyOffsetMs);
+    loadVelocityThreshold().then(setVelocityThreshold);
+  }, []);
+
   const {
     isSupported,
     permissionState,
@@ -81,14 +99,19 @@ export default function App() {
     setLearningInstrument,
     requestMidiAccess,
     clearLogs,
-    resetMappingsToDefault
+    resetMappingsToDefault,
+    setMappings,
   } = useMIDI({
     triggerKick,
     triggerSnare,
     triggerHiHat,
     onVisualTrigger: (instrument, velocity) => {
       setExternalVisualTrigger({ instrument, timestamp: Date.now(), velocity });
-    }
+    },
+    onRawHit: (hit) => {
+      setLatestRawHit(hit);
+    },
+    velocityThreshold,
   });
 
   return (
@@ -104,6 +127,24 @@ export default function App() {
         completedLessonIds={completedLessonIds}
       />
 
+      {/* Latency Calibration Wizard */}
+      <LatencyCalibrationWizard
+        isOpen={showLatencyWizard}
+        onClose={() => setShowLatencyWizard(false)}
+        engineRef={{ current: null }}
+        onCalibrationSaved={(offset) => setLatencyOffsetMs(offset)}
+        currentOffsetMs={latencyOffsetMs}
+      />
+
+      {/* Velocity Threshold Wizard */}
+      <MidiThresholdWizard
+        isOpen={showThresholdWizard}
+        onClose={() => setShowThresholdWizard(false)}
+        latestRawHit={latestRawHit}
+        onThresholdSaved={(threshold) => setVelocityThreshold(threshold)}
+        currentThreshold={velocityThreshold}
+      />
+
       {/* Upper Navigation / Decorative Header Banner */}
       <header className="border-b border-slate-900 bg-[#0A0A0C]/90 sticky top-0 backdrop-blur-md z-10">
         <div className="max-w-6xl mx-auto px-4 py-4.5 flex items-center justify-between">
@@ -113,7 +154,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-sans text-sm font-bold tracking-tight text-white flex items-center gap-1.5 leading-none">
-                Drum Coach <span className="text-[9px] bg-emerald-500/10 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/10">v2.0</span>
+                Drum Coach <span className="text-[9px] bg-emerald-500/10 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/10">v3.0</span>
               </h1>
               <span className="text-[10px] font-sans font-medium text-slate-500 tracking-wide">Rhythmic timing & rudiment accelerator</span>
             </div>
@@ -231,6 +272,7 @@ export default function App() {
               externalVisualTrigger={externalVisualTrigger}
               onHistoryUpdated={setTimingHistory}
               importedPattern={importedPattern}
+              latencyOffsetMs={latencyOffsetMs}
             />
 
             <AIInstructor
@@ -339,6 +381,11 @@ export default function App() {
               requestMidiAccess={requestMidiAccess}
               clearLogs={clearLogs}
               resetMappingsToDefault={resetMappingsToDefault}
+              setMappings={setMappings}
+              latencyOffsetMs={latencyOffsetMs}
+              velocityThreshold={velocityThreshold}
+              onOpenLatencyWizard={() => setShowLatencyWizard(true)}
+              onOpenThresholdWizard={() => setShowThresholdWizard(true)}
             />
           </div>
 

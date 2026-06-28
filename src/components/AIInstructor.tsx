@@ -1,22 +1,26 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  GraduationCap, 
-  Send, 
-  Sparkles, 
-  Undo, 
-  Activity, 
-  RefreshCw, 
-  Bookmark, 
-  Compass, 
-  Flame, 
+import {
+  GraduationCap,
+  Send,
+  Sparkles,
+  Undo,
+  Activity,
+  RefreshCw,
+  Bookmark,
+  Compass,
+  Flame,
   Terminal,
   Clock,
   Music,
   Check,
-  Zap
+  Zap,
+  TrendingUp,
+  ChevronDown
 } from 'lucide-react';
 import { BeatDivision } from '../types';
+import { supabase } from '../lib/supabaseClient';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 export interface ChatMessage {
   id: string;
@@ -36,6 +40,13 @@ interface AIInstructorProps {
 }
 
 const STORAGE_KEY = 'metrome_drum_instructor_chat_v1';
+
+interface WeeklyTrend {
+  label: string;
+  avgOffset: number;
+  avgJitter: number;
+  count: number;
+}
 
 const SUGGESTED_QUESTIONS = [
   "Suggest a 10-minute speed warm-up",
@@ -75,7 +86,51 @@ export function AIInstructor({
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [weeklyTrends, setWeeklyTrends] = useState<WeeklyTrend[]>([]);
+  const [showTrends, setShowTrends] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const fetchWeeklyTrends = useCallback(async () => {
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data, error } = await supabase
+        .from('lesson_progress')
+        .select('avg_offset_ms, jitter_ms, completed_at')
+        .gte('completed_at', thirtyDaysAgo.toISOString())
+        .order('completed_at', { ascending: true });
+
+      if (error || !data || data.length === 0) return;
+
+      // Group by ISO week
+      const weekMap = new Map<string, { offsets: number[]; jitters: number[] }>();
+      for (const row of data) {
+        const d = new Date(row.completed_at);
+        const startOfWeek = new Date(d);
+        startOfWeek.setDate(d.getDate() - d.getDay());
+        const key = startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        if (!weekMap.has(key)) weekMap.set(key, { offsets: [], jitters: [] });
+        const entry = weekMap.get(key)!;
+        entry.offsets.push(row.avg_offset_ms);
+        entry.jitters.push(row.jitter_ms);
+      }
+
+      const trends: WeeklyTrend[] = Array.from(weekMap.entries()).map(([label, { offsets, jitters }]) => ({
+        label,
+        avgOffset: Math.round(offsets.reduce((s, v) => s + v, 0) / offsets.length),
+        avgJitter: Math.round(jitters.reduce((s, v) => s + v, 0) / jitters.length),
+        count: offsets.length,
+      }));
+
+      setWeeklyTrends(trends);
+    } catch {
+      // silently ignore trend fetch errors
+    }
+  }, []);
+
+  useEffect(() => { fetchWeeklyTrends(); }, [fetchWeeklyTrends]);
 
   // Compute timing performance analytics if history is available
   const timingSummary = useMemo(() => {
@@ -130,10 +185,23 @@ export function AIInstructor({
     setMessages(prev => [...prev, userMsg]);
     setIsTyping(true);
 
+    // Refresh 30-day trends before building the prompt
+    await fetchWeeklyTrends();
+
     try {
       // Build a robust, highly detailed prompt payload for Coach Dave
       let contextPrompt = "";
       if (timingSummary) {
+        const trendSection = weeklyTrends.length >= 2
+          ? `\n\n30-Day Weekly Performance History:\n| Week | Avg Offset (ms) | Avg Jitter (ms) | Sessions |\n|------|----------------|----------------|----------|\n${
+            weeklyTrends.map(t => `| ${t.label} | ${t.avgOffset > 0 ? '+' : ''}${t.avgOffset} | ${t.avgJitter} | ${t.count} |`).join('\n')
+          }\nTrend direction: ${
+            weeklyTrends.length >= 2
+              ? (weeklyTrends[weeklyTrends.length - 1].avgJitter < weeklyTrends[0].avgJitter ? 'consistency IMPROVING' : 'consistency needs work')
+              : 'insufficient data'
+          }`
+          : '';
+
         contextPrompt = `[System Context: Metronome is currently set to ${bpm} BPM, Subdivisions: ${division} hits per beat, and Beats per measure: ${beatsPerMeasure}].
 The user wants a personalized 5-minute custom warm-up routine based on their recent timing performance.
 Here are the user's detailed latency performance metrics:
@@ -141,7 +209,7 @@ Here are the user's detailed latency performance metrics:
 - Average offset: ${timingSummary.avg}ms (negative is early/rushing, positive is late/dragging)
 - Timing consistency (Jitter/Standard Deviation): ${timingSummary.jitter}ms
 - Rating breakdown: ${timingSummary.perfects} Perfects, ${timingSummary.goods} Goods, ${timingSummary.earlys} Early, ${timingSummary.lates} Late.
-- General timing tendency: ${timingSummary.tendency}
+- General timing tendency: ${timingSummary.tendency}${trendSection}
 
 If the user is rushing, suggest exercises to help them settle into the pocket (e.g., slow gap-clicks, space-grooves, alternating dynamics). If dragging, suggest exercises to help them stay on top of the beat. If they have high jitter (inconsistency), suggest exercises to stabilize their timing (like steady single-stroke roll endurance).
 Please structure the 5-minute custom routine into 2-3 specific rudiment exercises with duration in minutes (totaling 5 minutes), clear physical instruction, and target counts. Provide highly encouraging feedback praising their effort. Use engaging, bulleted list markdown format with bolding.`;
@@ -429,6 +497,71 @@ User query: ${textToSend}`;
           <Zap className="h-3 w-3 fill-white" /> AI Warm-up
         </button>
       </div>
+
+      {/* 30-Day Performance Trend Panel */}
+      {weeklyTrends.length >= 2 && (
+        <div className="border-b border-slate-900">
+          <button
+            onClick={() => setShowTrends(p => !p)}
+            className="w-full flex items-center justify-between px-6 py-2.5 bg-slate-950/20 hover:bg-slate-950/40 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="text-[10px] font-bold font-sans text-slate-400 uppercase tracking-wider">
+                30-Day Performance Trend
+              </span>
+              <span className="text-[9px] font-mono text-slate-600">{weeklyTrends.length} weeks</span>
+            </div>
+            <motion.div animate={{ rotate: showTrends ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+            </motion.div>
+          </button>
+
+          <AnimatePresence>
+            {showTrends && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                <div className="px-6 py-4 space-y-3">
+                  <div className="h-28">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={weeklyTrends} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                        <defs>
+                          <linearGradient id="offsetGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="jitterGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="label" tick={{ fontSize: 8, fill: '#475569' }} />
+                        <YAxis tick={{ fontSize: 8, fill: '#475569' }} />
+                        <Tooltip
+                          contentStyle={{ background: '#0F0F11', border: '1px solid #1e293b', borderRadius: 8, fontSize: 10 }}
+                          labelStyle={{ color: '#94a3b8' }}
+                          formatter={(val: number, name: string) => [`${val}ms`, name === 'avgOffset' ? 'Offset' : 'Jitter']}
+                        />
+                        <Area type="monotone" dataKey="avgOffset" stroke="#10b981" strokeWidth={1.5} fill="url(#offsetGrad)" dot={{ r: 2, fill: '#10b981' }} />
+                        <Area type="monotone" dataKey="avgJitter" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="3 2" fill="url(#jitterGrad)" dot={{ r: 2, fill: '#f59e0b' }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex items-center gap-4 text-[9px] font-mono text-slate-500">
+                    <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-emerald-500 inline-block" /> Avg Offset (ms)</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-amber-500 inline-block border-dashed" /> Jitter (ms)</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Chat messages viewport */}
       <div 

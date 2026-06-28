@@ -1,16 +1,7 @@
-import { 
-  Keyboard, 
-  Cpu, 
-  Activity, 
-  Wifi, 
-  WifiOff, 
-  Trash2, 
-  RotateCcw, 
-  Sparkles, 
-  HelpCircle,
-  Volume2
-} from 'lucide-react';
+import { useState } from 'react';
+import { Keyboard, Cpu, Activity, Wifi, WifiOff, Trash2, RotateCcw, FileSliders as Sliders, Clock, ChevronDown } from 'lucide-react';
 import { MidiDevice, MidiLog, MidiLearningInstrument } from '../hooks/useMIDI';
+import { MIDI_PROFILES } from '../data/midiProfiles';
 
 interface MidiSettingsProps {
   isSupported: boolean;
@@ -23,6 +14,11 @@ interface MidiSettingsProps {
   requestMidiAccess: () => void;
   clearLogs: () => void;
   resetMappingsToDefault: () => void;
+  setMappings: (m: { kick: number; snare: number; hihat: number }) => void;
+  latencyOffsetMs: number;
+  velocityThreshold?: number;
+  onOpenLatencyWizard: () => void;
+  onOpenThresholdWizard: () => void;
 }
 
 export function MidiSettings({
@@ -35,12 +31,26 @@ export function MidiSettings({
   setLearningInstrument,
   requestMidiAccess,
   clearLogs,
-  resetMappingsToDefault
+  resetMappingsToDefault,
+  setMappings,
+  latencyOffsetMs,
+  velocityThreshold,
+  onOpenLatencyWizard,
+  onOpenThresholdWizard,
 }: MidiSettingsProps) {
-  
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const applyProfile = (profileId: string) => {
+    const profile = MIDI_PROFILES.find(p => p.id === profileId);
+    if (profile) {
+      setMappings(profile.mappings);
+    }
+    setProfileOpen(false);
+  };
+
   return (
     <div className="bg-[#0F0F11] p-6 rounded-3xl border border-slate-900 backdrop-blur-md space-y-6 w-full max-w-xl mx-auto shadow-2xl">
-      
+
       {/* Header section */}
       <div className="flex items-center justify-between border-b border-slate-900 pb-4">
         <div>
@@ -62,10 +72,41 @@ export function MidiSettings({
         </div>
       </div>
 
-      {/* Description / Introduction info */}
+      {/* Description */}
       <p className="text-xs text-slate-400 leading-relaxed">
         Connect your digital drums, MIDI pad controllers, or e-drum kits via USB. Striking your drumming pads will instantly trigger corresponding sounds in real-time.
       </p>
+
+      {/* Calibration Shortcuts */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <button
+          onClick={onOpenLatencyWizard}
+          className="flex flex-col items-start gap-1 p-3 rounded-2xl bg-[#141417]/60 border border-slate-900 hover:border-emerald-900/50 hover:bg-emerald-950/10 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between w-full">
+            <Clock className="h-3.5 w-3.5 text-emerald-400" />
+            <span className="font-mono text-[9px] font-bold text-emerald-400/70 group-hover:text-emerald-400 transition-colors">
+              {latencyOffsetMs !== 0 ? `${latencyOffsetMs > 0 ? '+' : ''}${latencyOffsetMs}ms` : 'Not set'}
+            </span>
+          </div>
+          <span className="text-[10px] font-bold text-slate-300 group-hover:text-slate-100 transition-colors">Latency Calibration</span>
+          <span className="text-[9px] text-slate-600">Measure hardware-to-audio delay</span>
+        </button>
+
+        <button
+          onClick={onOpenThresholdWizard}
+          className="flex flex-col items-start gap-1 p-3 rounded-2xl bg-[#141417]/60 border border-slate-900 hover:border-sky-900/50 hover:bg-sky-950/10 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between w-full">
+            <Sliders className="h-3.5 w-3.5 text-sky-400" />
+            <span className="font-mono text-[9px] font-bold text-sky-400/70 group-hover:text-sky-400 transition-colors">
+              {velocityThreshold !== undefined ? `v${velocityThreshold}` : 'Not set'}
+            </span>
+          </div>
+          <span className="text-[10px] font-bold text-slate-300 group-hover:text-slate-100 transition-colors">Velocity Threshold</span>
+          <span className="text-[9px] text-slate-600">Hi-Hat vs. Snare separation</span>
+        </button>
+      </div>
 
       {/* 1. Controller permissions & Device status */}
       <div className="bg-slate-950/40 p-4 border border-slate-900 rounded-2xl space-y-3">
@@ -87,8 +128,8 @@ export function MidiSettings({
           devices.length > 0 ? (
             <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
               {devices.map((device) => (
-                <div 
-                  key={device.id} 
+                <div
+                  key={device.id}
                   className="flex items-center justify-between text-[11px] bg-[#141417]/80 px-3 py-2 rounded-xl border border-slate-900/80"
                 >
                   <div className="flex items-center gap-2">
@@ -120,7 +161,40 @@ export function MidiSettings({
         )}
       </div>
 
-      {/* 2. Note Mappings UI with Learn triggers */}
+      {/* 2. Kit Profile Picker */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="font-sans text-[10px] font-bold text-slate-500 uppercase tracking-[0.18em]">
+            Kit Profile
+          </span>
+          <span className="text-[9px] text-slate-600 font-mono">Auto-loads note mappings</span>
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setProfileOpen(p => !p)}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 bg-[#141417]/60 border border-slate-900 rounded-xl text-[11px] text-slate-300 hover:border-slate-800 transition-colors cursor-pointer"
+          >
+            <span>Select a preset kit profile...</span>
+            <ChevronDown className={`h-3.5 w-3.5 text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {profileOpen && (
+            <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-[#0F0F11] border border-slate-800 rounded-xl shadow-2xl overflow-hidden">
+              {MIDI_PROFILES.map(profile => (
+                <button
+                  key={profile.id}
+                  onClick={() => applyProfile(profile.id)}
+                  className="w-full text-left px-4 py-2.5 hover:bg-slate-900/60 transition-colors cursor-pointer border-b border-slate-900 last:border-0"
+                >
+                  <span className="text-[11px] font-bold text-slate-200 block">{profile.name}</span>
+                  <span className="text-[9px] text-slate-600">{profile.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Note Mappings UI with Learn triggers */}
       <div className="space-y-3.5">
         <div className="flex items-center justify-between">
           <span className="font-sans text-[10px] font-bold text-slate-500 uppercase tracking-[0.18em]">
@@ -135,10 +209,10 @@ export function MidiSettings({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          {/* Kick controller mapping */}
+          {/* Kick */}
           <div className={`p-3 rounded-2xl border transition-all ${
-            learningInstrument === 'kick' 
-              ? 'bg-purple-950/20 border-purple-400 ring-1 ring-purple-400' 
+            learningInstrument === 'kick'
+              ? 'bg-purple-950/20 border-purple-400 ring-1 ring-purple-400'
               : 'bg-[#141417]/40 border-slate-900'
           }`}>
             <div className="flex items-center justify-between">
@@ -147,7 +221,6 @@ export function MidiSettings({
                 N {mappings.kick}
               </span>
             </div>
-            
             <button
               onClick={() => setLearningInstrument(learningInstrument === 'kick' ? null : 'kick')}
               className={`w-full py-1.5 mt-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
@@ -160,19 +233,18 @@ export function MidiSettings({
             </button>
           </div>
 
-          {/* Snare controller mapping */}
+          {/* Snare */}
           <div className={`p-3 rounded-2xl border transition-all ${
-            learningInstrument === 'snare' 
-              ? 'bg-amber-950/20 border-amber-400 ring-1 ring-amber-400' 
+            learningInstrument === 'snare'
+              ? 'bg-amber-950/20 border-amber-400 ring-1 ring-amber-400'
               : 'bg-[#141417]/40 border-slate-900'
           }`}>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-200">Snare Drum</span>
-              <span className="font-mono text-[10px] bg-slate-950 px-2 py-0.5 rounded text-amber-450 font-semibold font-mono">
+              <span className="font-mono text-[10px] bg-slate-950 px-2 py-0.5 rounded text-amber-450 font-semibold">
                 N {mappings.snare}
               </span>
             </div>
-            
             <button
               onClick={() => setLearningInstrument(learningInstrument === 'snare' ? null : 'snare')}
               className={`w-full py-1.5 mt-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
@@ -185,10 +257,10 @@ export function MidiSettings({
             </button>
           </div>
 
-          {/* Hihat controller mapping */}
+          {/* Hi-Hat */}
           <div className={`p-3 rounded-2xl border transition-all ${
-            learningInstrument === 'hihat' 
-              ? 'bg-sky-950/20 border-sky-400 ring-1 ring-sky-400' 
+            learningInstrument === 'hihat'
+              ? 'bg-sky-950/20 border-sky-400 ring-1 ring-sky-400'
               : 'bg-[#141417]/40 border-slate-900'
           }`}>
             <div className="flex items-center justify-between">
@@ -197,7 +269,6 @@ export function MidiSettings({
                 N {mappings.hihat}
               </span>
             </div>
-            
             <button
               onClick={() => setLearningInstrument(learningInstrument === 'hihat' ? null : 'hihat')}
               className={`w-full py-1.5 mt-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
@@ -213,12 +284,12 @@ export function MidiSettings({
 
         {learningInstrument && (
           <p className="text-[10px] text-indigo-400 animate-pulse text-center leading-normal italic font-medium">
-            → Strike a pad or key on your physical controller now to bind that MIDI note automatically.
+            Strike a pad or key on your physical controller now to bind that MIDI note automatically.
           </p>
         )}
       </div>
 
-      {/* 3. Real-time MIDI Activity Monitor Console */}
+      {/* 4. Real-time MIDI Activity Monitor Console */}
       <div className="bg-slate-950 border border-slate-900 p-4 rounded-2xl space-y-3 shadow-inner">
         <div className="flex items-center justify-between border-b border-slate-900 pb-2">
           <span className="font-mono text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -237,8 +308,8 @@ export function MidiSettings({
         <div className="min-h-24 max-h-36 overflow-y-auto space-y-1 font-mono text-[10.5px]">
           {midiLogs.length > 0 ? (
             midiLogs.map((log) => (
-              <div 
-                key={log.id} 
+              <div
+                key={log.id}
                 className="flex items-center justify-between text-slate-400 hover:text-slate-300 py-0.5 leading-relaxed"
               >
                 <div className="flex items-center gap-1.5 truncate max-w-[70%]">
@@ -249,14 +320,14 @@ export function MidiSettings({
                   <span className="text-slate-300 font-bold">Note {log.note}</span>
                   <span className="text-slate-650">v{log.velocity}</span>
                 </div>
-                
+
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wide uppercase ${
-                  log.matchedInstrument === 'kick' 
-                    ? 'bg-purple-950/40 text-purple-400 border border-purple-900/30' 
-                    : log.matchedInstrument === 'snare' 
-                    ? 'bg-amber-950/40 text-amber-500 border border-amber-900/30' 
-                    : log.matchedInstrument === 'hihat' 
-                    ? 'bg-sky-950/40 text-sky-400 border border-sky-900/30' 
+                  log.matchedInstrument === 'kick'
+                    ? 'bg-purple-950/40 text-purple-400 border border-purple-900/30'
+                    : log.matchedInstrument === 'snare'
+                    ? 'bg-amber-950/40 text-amber-500 border border-amber-900/30'
+                    : log.matchedInstrument === 'hihat'
+                    ? 'bg-sky-950/40 text-sky-400 border border-sky-900/30'
                     : 'bg-slate-900/50 text-slate-600'
                 }`}>
                   {log.matchedInstrument === 'unmapped' ? 'unmapped' : log.matchedInstrument}
@@ -270,7 +341,7 @@ export function MidiSettings({
           )}
         </div>
       </div>
-      
+
     </div>
   );
 }

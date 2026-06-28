@@ -1,11 +1,11 @@
 import { useState, ChangeEvent } from 'react';
 import { Midi } from '@tonejs/midi';
-import { Upload, Check, Trash2, Drum, FileText, Info, Play, AlertCircle } from 'lucide-react';
+import { Upload, Check, Trash2, Drum, FileText, Info, Play, CircleAlert as AlertCircle } from 'lucide-react';
 
 interface ChartNote {
   time: number;
   instrument: 'kick' | 'snare' | 'hihat';
-  step: number; // calculated step (0-15 based on rhythmic division)
+  step: number;
   velocity: number;
 }
 
@@ -21,6 +21,88 @@ interface ChartIngestionProps {
   }) => void;
 }
 
+// ---- .chart format parser (Moonscraper / Clone Hero / Guitar Hero) ----
+function parseChartFile(text: string, fileName: string): { name: string; bpm: number; notes: ChartNote[] } {
+  const lines = text.split('\n').map(l => l.trim());
+
+  let title = fileName.replace(/\.chart$/i, '');
+  let bpm = 120;
+  let resolution = 192; // ticks per quarter note
+
+  // Parse [Song] section for metadata
+  let inSong = false;
+  let inDrums = false;
+  let drumsLines: string[] = [];
+
+  for (const line of lines) {
+    if (line === '[Song]') { inSong = true; inDrums = false; continue; }
+    if (line === '[ExpertDrums]' || line === '[HardDrums]' || line === '[MediumDrums]') {
+      inDrums = true; inSong = false; continue;
+    }
+    if (line === '{') continue;
+    if (line === '}') { inSong = false; inDrums = false; continue; }
+
+    if (inSong) {
+      const nameMatch = line.match(/^Name\s*=\s*"(.+)"/i);
+      if (nameMatch) title = nameMatch[1];
+
+      const resMatch = line.match(/^Resolution\s*=\s*(\d+)/i);
+      if (resMatch) resolution = parseInt(resMatch[1], 10);
+    }
+
+    if (inDrums) {
+      drumsLines.push(line);
+    }
+  }
+
+  // Parse [SyncTrack] for first BPM event
+  let inSync = false;
+  for (const line of lines) {
+    if (line === '[SyncTrack]') { inSync = true; continue; }
+    if (inSync && line === '}') { inSync = false; continue; }
+    if (inSync) {
+      // Format: <tick> = B <bpm_millihertz>
+      const bMatch = line.match(/^\d+\s*=\s*B\s+(\d+)/);
+      if (bMatch) {
+        bpm = Math.round(parseInt(bMatch[1], 10) / 1000);
+        break;
+      }
+    }
+  }
+
+  // Parse drum note entries from collected drum section lines
+  // Note index to drum instrument mapping (GH/Rock Band convention):
+  // 0 = kick, 1 = red (snare), 2 = yellow (hihat), 3 = blue, 4 = green
+  const notes: ChartNote[] = [];
+  const secondsPerTick = 60 / (bpm * resolution);
+  const stepDurationSecs = (60 / bpm) / 4;
+
+  for (const line of drumsLines) {
+    // Format: <tick> = N <noteIndex> <sustain>
+    const noteMatch = line.match(/^(\d+)\s*=\s*N\s+(\d+)\s+\d+/);
+    if (!noteMatch) continue;
+
+    const tick = parseInt(noteMatch[1], 10);
+    const noteIndex = parseInt(noteMatch[2], 10);
+
+    let instrument: 'kick' | 'snare' | 'hihat' | null = null;
+    if (noteIndex === 0) instrument = 'kick';
+    else if (noteIndex === 1) instrument = 'snare';
+    else if (noteIndex === 2 || noteIndex === 3) instrument = 'hihat';
+
+    if (!instrument) continue;
+
+    const timeSecs = tick * secondsPerTick;
+    const measureDuration = (60 / bpm) * 4;
+    const timeInMeasure = timeSecs % measureDuration;
+    const step = Math.floor(timeInMeasure / stepDurationSecs) % 16;
+
+    notes.push({ time: timeSecs, instrument, step, velocity: 0.8 });
+  }
+
+  return { name: title, bpm, notes };
+}
+
 export function ChartIngestion({ onChartImported }: ChartIngestionProps) {
   const [midiFile, setMidiFile] = useState<File | null>(null);
   const [parsedName, setParsedName] = useState<string>('');
@@ -29,6 +111,7 @@ export function ChartIngestion({ onChartImported }: ChartIngestionProps) {
   const [duration, setDuration] = useState<number>(0);
   const [notesParsed, setNotesParsed] = useState<ChartNote[]>([]);
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [detectedFormat, setDetectedFormat] = useState<'MIDI' | 'CHART' | null>(null);
 
   // Extract drum triggers from ArrayBuffer
   const parseMidiBuffer = async (arrayBuffer: ArrayBuffer, fileName: string) => {
@@ -120,8 +203,32 @@ export function ChartIngestion({ onChartImported }: ChartIngestionProps) {
     if (!file) return;
 
     setMidiFile(file);
-    const arrayBuffer = await file.arrayBuffer();
-    parseMidiBuffer(arrayBuffer, file.name);
+    setErrorMsg('');
+
+    const isChartFile = file.name.toLowerCase().endsWith('.chart');
+
+    if (isChartFile) {
+      setDetectedFormat('CHART');
+      try {
+        const text = await file.text();
+        const { name, bpm, notes } = parseChartFile(text, file.name);
+        setParsedName(name);
+        setParsedTrackCount(1);
+        setTempo(bpm);
+        setDuration(0);
+        setNotesParsed(notes);
+        if (notes.length === 0) {
+          setErrorMsg('No drum notes found. Ensure the file contains [ExpertDrums], [HardDrums], or [MediumDrums] sections.');
+        }
+      } catch (err: any) {
+        setErrorMsg('Failed to parse .chart file. Check the file format and try again.');
+        console.error('.chart parse error:', err);
+      }
+    } else {
+      setDetectedFormat('MIDI');
+      const arrayBuffer = await file.arrayBuffer();
+      parseMidiBuffer(arrayBuffer, file.name);
+    }
   };
 
   // Convert parsed hits into a clean 16-step boolean sequence grid
@@ -188,6 +295,7 @@ export function ChartIngestion({ onChartImported }: ChartIngestionProps) {
     setParsedTrackCount(0);
     setNotesParsed([]);
     setErrorMsg('');
+    setDetectedFormat(null);
   };
 
   // Group notes counts for dynamic readout indicators
@@ -225,15 +333,15 @@ export function ChartIngestion({ onChartImported }: ChartIngestionProps) {
         <div className="relative border border-dashed border-slate-900 bg-slate-950/40 rounded-2xl p-6 text-center hover:border-slate-800 transition-colors">
           <input
             type="file"
-            accept=".mid,.midi"
+            accept=".mid,.midi,.chart"
             onChange={handleFileChange}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
           <div className="space-y-2 py-4">
             <Upload className="h-8 w-8 text-slate-650 mx-auto" />
             <div>
-              <p className="text-xs font-bold text-slate-350">Drag & Drop standard `.mid` file here</p>
-              <p className="text-[10px] text-slate-550 mt-1">Accepts standard Format 0 & 1 community drum maps</p>
+              <p className="text-xs font-bold text-slate-350">Drag & Drop a drum chart file here</p>
+              <p className="text-[10px] text-slate-550 mt-1">Accepts <strong>.mid</strong> / <strong>.midi</strong> (Format 0 & 1) and <strong>.chart</strong> (Moonscraper / Clone Hero)</p>
             </div>
           </div>
         </div>
@@ -247,9 +355,20 @@ export function ChartIngestion({ onChartImported }: ChartIngestionProps) {
                 <FileText className="h-4.5 w-4.5 text-indigo-400" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-slate-200 truncate max-w-[200px]">{parsedName}</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-slate-200 truncate max-w-[180px]">{parsedName}</h4>
+                  {detectedFormat && (
+                    <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${
+                      detectedFormat === 'CHART'
+                        ? 'bg-amber-950/30 text-amber-400 border-amber-900/40'
+                        : 'bg-indigo-950/30 text-indigo-400 border-indigo-900/40'
+                    }`}>
+                      {detectedFormat}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[8.5px] font-mono text-slate-500 uppercase">
-                  Tracks: {parsedTrackCount} &bull; Tempo: {tempo} BPM &bull; Length: {duration}s
+                  Tracks: {parsedTrackCount} &bull; Tempo: {tempo} BPM{duration > 0 ? ` &bull; Length: ${duration}s` : ''}
                 </span>
               </div>
             </div>
@@ -316,7 +435,7 @@ export function ChartIngestion({ onChartImported }: ChartIngestionProps) {
           </span>
         </div>
         <p className="text-[10px] text-slate-500 leading-relaxed font-sans">
-          This system uses <strong>@tonejs/midi</strong> to parse raw MIDI events. It parses drum notes, aligns them to a synchronized 16-step practice loop based on BPM, and loads them into your training panel so you can play along.
+          Supports <strong>.mid</strong> files via <strong>@tonejs/midi</strong> (parses GM drum channel notes) and <strong>.chart</strong> files (Moonscraper / Clone Hero format, reads <code>[ExpertDrums]</code> sections). Both formats align notes to a 16-step practice grid at the detected BPM.
         </p>
       </div>
 
