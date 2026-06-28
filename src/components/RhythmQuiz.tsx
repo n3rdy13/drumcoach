@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CircleCheck as CheckCircle2, Circle as XCircle, Circle as HelpCircle, ChevronRight, RotateCcw, Brain } from 'lucide-react';
 import { QuizQuestion, QuizAttempt } from '../types';
 import { QUIZ_BANK } from '../data/quizBank';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, SESSION_ID } from '../lib/supabaseClient';
 
 interface RhythmQuizProps {
   quizId: string;
@@ -41,6 +41,7 @@ export function RhythmQuiz({ quizId, lessonTitle, onComplete }: RhythmQuizProps)
       quiz_id: quizId,
       question_id: current.id,
       was_correct: wasCorrect,
+      session_id: SESSION_ID,
     });
   };
 

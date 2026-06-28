@@ -15,7 +15,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { BADGE_DEFINITIONS, BadgeDefinition, getProfileTitle } from '../types';
-import { supabase, UserAchievementRecord } from '../lib/supabaseClient';
+import { supabase, SESSION_ID, UserAchievementRecord } from '../lib/supabaseClient';
 
 interface AchievementDrawerProps {
   isOpen: boolean;
@@ -61,7 +61,7 @@ export function AchievementDrawer({ isOpen, onClose, completedLessonIds }: Achie
       if (badge.requirement(completedLessonIds)) {
         const { error } = await supabase
           .from('user_achievements')
-          .upsert({ badge_id: badge.id }, { onConflict: 'badge_id', ignoreDuplicates: true });
+          .upsert({ badge_id: badge.id, session_id: SESSION_ID }, { onConflict: 'badge_id', ignoreDuplicates: true });
         if (!error) {
           setEarnedBadgeIds((prev) =>
             prev.includes(badge.id) ? prev : [...prev, badge.id]

@@ -5,7 +5,7 @@ import { BeatDivision, Lesson } from '../types';
 import { CURRICULUM } from '../data/curriculum';
 import { RhythmQuiz } from './RhythmQuiz';
 import { LessonProgressChart } from './LessonProgressChart';
-import { supabase, LessonProgressRecord } from '../lib/supabaseClient';
+import { supabase, SESSION_ID, LessonProgressRecord } from '../lib/supabaseClient';
 
 interface DrumLessonsProps {
   isPlaying: boolean;
@@ -200,6 +200,7 @@ export function DrumLessons({
         jitter_ms: jitter,
         streak_achieved: activeLesson.targetStreak,
         session_bpm: bpm,
+        session_id: SESSION_ID,
       });
 
       setProgressRecords([]);

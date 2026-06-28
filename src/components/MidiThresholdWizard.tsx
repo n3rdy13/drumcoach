@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, FileSliders as Sliders, CircleCheck as CheckCircle, RotateCcw, Info, Loader, ArrowRight } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, SESSION_ID } from '../lib/supabaseClient';
 import type { RawMidiHit } from '../hooks/useMIDI';
 
 const SAMPLES_PER_PHASE = 8;
@@ -92,6 +92,7 @@ export function MidiThresholdWizard({ isOpen, onClose, latestRawHit, onThreshold
           hihat_max_velocity: hihatMax,
           snare_min_velocity: snareMin,
           calibrated_at: new Date().toISOString(),
+          session_id: SESSION_ID,
         }, { onConflict: 'id' });
 
       if (error) throw error;

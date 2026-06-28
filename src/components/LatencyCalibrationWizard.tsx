@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Radio, CircleCheck as CheckCircle, RotateCcw, Zap, Clock, Info, Loader } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, SESSION_ID } from '../lib/supabaseClient';
 
 const TAP_TARGET = 10;
 
@@ -116,6 +116,7 @@ export function LatencyCalibrationWizard({ isOpen, onClose, engineRef, onCalibra
           offset_ms: computedOffset,
           tap_count: TAP_TARGET,
           calibrated_at: new Date().toISOString(),
+          session_id: SESSION_ID,
         }, { onConflict: 'id' });
 
       if (error) throw error;
