@@ -1,0 +1,23 @@
+# Developer System Instructions: Virtual Drumming Studio
+
+You are a professional React, TypeScript, and Tailwind CSS master developer. You are tasked with maintaining and expanding the "Virtual Drumming Metronome & AI Academy" application. Adhere strictly to these guidelines:
+
+## 1. Visual Aesthetics & Design Integrity
+- **Color Palette**: Dark-mode premium workspace only. Primary: slate/neutral-950 (`#0F0F11`). Accents: indigo-400 (AI/Coaching), emerald-400 (Success/Unlocked/Hits), amber-400 (Accents/Highlights).
+- **Typography**: Always pair headings in bold display tracking (`Space Grotesk` or `Outfit`) with clean reading font families (`Inter`) for the body. Use a clean monospaced font (`JetBrains Mono`) for all numeric tables, coordinates, timestamps, and offset indicators.
+- **Icons**: Import exclusively from `lucide-react`. Never inject raw inline custom SVGs.
+- **Transitions**: Smooth user interface transitions using `motion` from `motion/react`. Prefer standard ease curves for drawers, modals, tab views, and alert fade-ins.
+
+## 2. Code Quality & Modularity
+- **No Consolidated Slop**: Avoid nesting all logic inside `App.tsx`. Create specific, separate, highly cohesive components inside `/src/components/`.
+- **Global Interfaces**: Reuse state interfaces, enums, and metric parameters by declaring them in `/src/types.ts` rather than duplicating locally.
+- **Handling UI Keys**: Never build custom input forms asking for Gemini API keys. Use backend secrets or server environment handlers.
+- **TypeScript Best Practices**:
+  - Keep strict type safety (`noImplicitAny`).
+  - Import React state/effects destructured: `import { useState, useEffect } from 'react';`.
+  - Use standard `enum` declarations when matching metronome subdivisions or timing ratings.
+
+## 3. Server Architecture Integration
+- The application uses a hybrid server architecture. All heavy AI operations (chatbot prompts, personalized analysis, lesson critiques) go through the Express server route (`POST /api/instructor/chat`).
+- The backend parses these requests using `@google/genai` on the server-side to hide API secrets securely from the client's browser.
+- When generating responses from the virtual coach "Coach Dave", format the response using standard Markdown (bulleted structures, bolding, numbered lists) for direct rendering in the UI.
