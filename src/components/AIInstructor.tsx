@@ -16,7 +16,9 @@ import {
   Check,
   Zap,
   TrendingUp,
-  ChevronDown
+  ChevronDown,
+  ChevronUp,
+  Cpu
 } from 'lucide-react';
 import { BeatDivision } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -27,6 +29,12 @@ export interface ChatMessage {
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
+}
+
+interface GeminiModel {
+  id: string;
+  label: string;
+  description: string;
 }
 
 interface AIInstructorProps {
@@ -88,7 +96,16 @@ export function AIInstructor({
   const [apiError, setApiError] = useState<string | null>(null);
   const [weeklyTrends, setWeeklyTrends] = useState<WeeklyTrend[]>([]);
   const [showTrends, setShowTrends] = useState(false);
+  const [availableModels, setAvailableModels] = useState<GeminiModel[]>([
+    { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", description: "Fast, efficient — ideal for chat" },
+    { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite", description: "Lightest & fastest responses" },
+    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Latest balanced model" },
+    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Most capable, slower" },
+  ]);
+  const [selectedModel, setSelectedModel] = useState("gemini-2.0-flash");
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const modelPickerRef = useRef<HTMLDivElement>(null);
 
   const fetchWeeklyTrends = useCallback(async () => {
     try {
@@ -131,6 +148,26 @@ export function AIInstructor({
   }, []);
 
   useEffect(() => { fetchWeeklyTrends(); }, [fetchWeeklyTrends]);
+
+  // Fetch available models from server
+  useEffect(() => {
+    fetch("/api/models")
+      .then(r => r.json())
+      .then(d => { if (d.models?.length) setAvailableModels(d.models); })
+      .catch(() => {});
+  }, []);
+
+  // Close model picker on outside click
+  useEffect(() => {
+    if (!modelPickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+        setModelPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [modelPickerOpen]);
 
   // Compute timing performance analytics if history is available
   const timingSummary = useMemo(() => {
@@ -225,6 +262,7 @@ Structure the routine into 2 or 3 exercises (totaling 5 minutes) using standard 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: contextPrompt,
+          model: selectedModel,
           history: messages.slice(-8).map(msg => ({
             sender: msg.sender,
             text: msg.text
@@ -362,6 +400,7 @@ User query: ${textToSend}`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: contextPrompt,
+          model: selectedModel,
           // Extract last 8 messages for memory efficiency
           history: messages.slice(-8).map(msg => ({
             sender: msg.sender,
@@ -466,14 +505,68 @@ User query: ${textToSend}`;
             </h2>
           </div>
         </div>
-        
-        <button
-          onClick={clearChatHistory}
-          className="text-[9px] uppercase tracking-wider font-mono font-bold text-slate-500 hover:text-rose-400 px-2 py-1 rounded bg-[#141417] border border-slate-900 transition-colors cursor-pointer"
-          title="Reset conversation"
-        >
-          Reset Session
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Model Selector */}
+          <div className="relative" ref={modelPickerRef}>
+            <button
+              onClick={() => setModelPickerOpen(p => !p)}
+              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-[#141417] border border-slate-800 hover:border-indigo-500/40 text-[9px] font-mono font-bold text-slate-400 hover:text-indigo-300 transition-colors cursor-pointer select-none"
+              title="Select AI model"
+            >
+              <Cpu className="h-3 w-3 text-indigo-400" />
+              <span className="hidden sm:inline">{availableModels.find(m => m.id === selectedModel)?.label ?? selectedModel}</span>
+              <motion.div animate={{ rotate: modelPickerOpen ? 180 : 0 }} transition={{ duration: 0.18 }}>
+                <ChevronDown className="h-3 w-3" />
+              </motion.div>
+            </button>
+
+            <AnimatePresence>
+              {modelPickerOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-9 z-50 bg-[#0F0F11] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden min-w-[220px]"
+                >
+                  <div className="px-3 py-2 border-b border-slate-900">
+                    <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-500">Select AI Model</p>
+                  </div>
+                  {availableModels.map(model => (
+                    <button
+                      key={model.id}
+                      onClick={() => { setSelectedModel(model.id); setModelPickerOpen(false); }}
+                      className={`w-full flex items-start gap-2.5 px-3 py-2.5 hover:bg-slate-900/60 transition-colors cursor-pointer text-left ${
+                        selectedModel === model.id ? 'bg-indigo-950/20' : ''
+                      }`}
+                    >
+                      <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                        selectedModel === model.id ? 'border-indigo-400 bg-indigo-500/20' : 'border-slate-700'
+                      }`}>
+                        {selectedModel === model.id && <div className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
+                      </div>
+                      <div>
+                        <p className={`text-[11px] font-bold font-sans ${selectedModel === model.id ? 'text-indigo-300' : 'text-slate-300'}`}>
+                          {model.label}
+                        </p>
+                        <p className="text-[9px] text-slate-600 font-mono">{model.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <button
+            onClick={clearChatHistory}
+            className="text-[9px] uppercase tracking-wider font-mono font-bold text-slate-500 hover:text-rose-400 px-2 py-1 rounded bg-[#141417] border border-slate-900 transition-colors cursor-pointer"
+            title="Reset conversation"
+          >
+            Reset Session
+          </button>
+        </div>
       </div>
 
       {/* AI Warm-up Generator Banner */}

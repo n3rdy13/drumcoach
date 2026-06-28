@@ -2,6 +2,8 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import dotenv from "dotenv";
+dotenv.config();
 
 async function startServer() {
   const app = express();
@@ -33,7 +35,7 @@ async function startServer() {
         });
       }
 
-      const { message, history = [] } = req.body;
+      const { message, history = [], model = "gemini-2.0-flash" } = req.body;
 
       if (!message) {
         return res.status(400).json({ error: "Message is required" });
@@ -63,7 +65,7 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
 
       // Create a chat session with history and system instruction
       const chat = ai.chats.create({
-        model: "gemini-3.5-flash",
+        model,
         history: formattedHistory,
         config: {
           systemInstruction,
@@ -84,6 +86,18 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
   // API Health Indicator
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", hasAPIKey: !!geminiApiKey });
+  });
+
+  // Available Gemini models
+  app.get("/api/models", (_req, res) => {
+    res.json({
+      models: [
+        { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", description: "Fast, efficient — ideal for chat" },
+        { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite", description: "Lightest & fastest responses" },
+        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Latest balanced model" },
+        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Most capable, slower" },
+      ]
+    });
   });
 
   // Vite middleware for development
