@@ -3,7 +3,20 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-dotenv.config();
+
+const envPath = path.resolve(process.cwd(), ".env");
+dotenv.config({ path: envPath });
+
+function getAI(): GoogleGenAI | null {
+  // Re-read .env on every call so key changes take effect without restart
+  dotenv.config({ path: envPath, override: true });
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  return new GoogleGenAI({
+    apiKey: key,
+    httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+  });
+}
 
 async function startServer() {
   const app = express();
@@ -11,27 +24,14 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Initialize Gemini AI Client (server-side only, secure)
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  let ai: GoogleGenAI | null = null;
-
-  if (geminiApiKey) {
-    ai = new GoogleGenAI({
-      apiKey: geminiApiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
-
   // Instructor Chat Endpoint
   app.post("/api/instructor/chat", async (req, res) => {
     try {
+      const ai = getAI();
+
       if (!ai) {
         return res.status(500).json({
-          error: "Gemini API key is not configured in the workspace settings. Please configure GEMINI_API_KEY under Secrets."
+          error: "GEMINI_API_KEY is not set. Add it to the .env file in the project root."
         });
       }
 
@@ -41,15 +41,14 @@ async function startServer() {
         return res.status(400).json({ error: "Message is required" });
       }
 
-      // Convert client message history format to the Content structure expected by @google/genai Chats
       const formattedHistory = history.map((msg: any) => ({
         role: msg.sender === "user" ? "user" : "model",
         parts: [{ text: msg.text }]
       }));
 
-      const systemInstruction = `You are "BeatBuddy AI" (or "Coach Dave"), an elite drumming instructor, multi-instrumentalist, and groove coach. Your mission is to provide encouraging, actionable, and visually clear drumming guidance. 
+      const systemInstruction = `You are "BeatBuddy AI" (or "Coach Dave"), an elite drumming instructor, multi-instrumentalist, and groove coach. Your mission is to provide encouraging, actionable, and visually clear drumming guidance.
 
-Keep your tone engaging, energetic, highly supportive, and professional. Use markdown to format your replies (with bolding, bullets, and short code snippets for rhythmic patterns). 
+Keep your tone engaging, energetic, highly supportive, and professional. Use markdown to format your replies (with bolding, bullets, and short code snippets for rhythmic patterns).
 
 You possess deep knowledge of:
 1. Drum rudiments (Single stroke, double stroke, paradiddles, flams, drags, and how to practice them with speed ramping).
@@ -63,14 +62,10 @@ CRITICAL FEATURE - SPEED-RAMPING METRONOME & INSTRUCTION COUPLING:
 
 Keep responses concise, clear, and focused on technique. Avoid overly verbose explanations of music theory unless requested; prioritize tips on physical feel, counts (e.g. "1 e & a 2 e & a"), and motivation.`;
 
-      // Create a chat session with history and system instruction
       const chat = ai.chats.create({
         model,
         history: formattedHistory,
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        },
+        config: { systemInstruction, temperature: 0.7 },
       });
 
       const response = await chat.sendMessage({ message });
@@ -84,18 +79,19 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
   });
 
   // API Health Indicator
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", hasAPIKey: !!geminiApiKey });
+  app.get("/api/health", (_req, res) => {
+    const key = process.env.GEMINI_API_KEY;
+    res.json({ status: "ok", hasAPIKey: !!key });
   });
 
   // Available Gemini models
   app.get("/api/models", (_req, res) => {
     res.json({
       models: [
-        { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", description: "Fast, efficient — ideal for chat" },
+        { id: "gemini-2.0-flash",      label: "Gemini 2.0 Flash",      description: "Fast, efficient — ideal for chat" },
         { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite", description: "Lightest & fastest responses" },
-        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Latest balanced model" },
-        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Most capable, slower" },
+        { id: "gemini-2.5-flash",      label: "Gemini 2.5 Flash",      description: "Latest balanced model" },
+        { id: "gemini-2.5-pro",        label: "Gemini 2.5 Pro",        description: "Most capable, slower" },
       ]
     });
   });
@@ -109,11 +105,10 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
     app.use(vite.middlewares);
     console.log("Started Vite Dev Server middleware inside custom Express Server");
   } else {
-    // Production static files service
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
