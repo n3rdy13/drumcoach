@@ -104,10 +104,10 @@ export function AIInstructor({
   const [weeklyTrends, setWeeklyTrends] = useState<WeeklyTrend[]>([]);
   const [showTrends, setShowTrends] = useState(false);
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([
-    { id: "gemini-3.1-flash", label: "Gemini 3.1 Flash", description: "Latest balanced — best availability" },
-    { id: "gemini-3.1-pro",   label: "Gemini 3.1 Pro",   description: "Most capable, slower" },
+    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Latest balanced — best availability" },
+    { id: "gemini-2.5-pro",   label: "Gemini 2.5 Pro",   description: "Most capable, slower" },
   ]);
-  const [selectedModel, setSelectedModel] = useState("gemini-3.1-flash");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
   const [modelStatus, setModelStatus] = useState<ModelStatus[]>([]);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
