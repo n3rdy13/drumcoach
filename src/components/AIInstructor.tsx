@@ -288,10 +288,13 @@ Structure the routine into 2 or 3 exercises (totaling 5 minutes) using standard 
         body: JSON.stringify({
           message: contextPrompt,
           model: selectedModel,
-          history: messages.slice(-8).map(msg => ({
-            sender: msg.sender,
-            text: msg.text
-          }))
+          history: messages
+            .filter(msg => msg.id !== 'welcome')
+            .slice(-8)
+            .map(msg => ({
+              sender: msg.sender,
+              text: msg.text
+            }))
         })
       });
 
@@ -429,11 +432,14 @@ User query: ${textToSend}`;
         body: JSON.stringify({
           message: contextPrompt,
           model: selectedModel,
-          // Extract last 8 messages for memory efficiency
-          history: messages.slice(-8).map(msg => ({
-            sender: msg.sender,
-            text: msg.text
-          }))
+          // Extract last 8 messages for memory efficiency, excluding the static welcome message
+          history: messages
+            .filter(msg => msg.id !== 'welcome')
+            .slice(-8)
+            .map(msg => ({
+              sender: msg.sender,
+              text: msg.text
+            }))
         })
       });
 

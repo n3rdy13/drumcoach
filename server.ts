@@ -53,9 +53,15 @@ async function tryModel(
   model: string,
   payload: ChatPayload
 ): Promise<string> {
+  // Guarantee history starts with a user turn; strip any leading model turns
+  const safeHistory = [...payload.formattedHistory];
+  while (safeHistory.length > 0 && safeHistory[0].role !== "user") {
+    safeHistory.shift();
+  }
+
   const chat = ai.chats.create({
     model,
-    history: payload.formattedHistory,
+    history: safeHistory,
     config: { systemInstruction: payload.systemInstruction, temperature: 0.7 },
   });
   const response = await chat.sendMessage({ message: payload.message });
