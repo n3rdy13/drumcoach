@@ -39,12 +39,8 @@ function parseRetryMs(errorMsg: string): number {
 
 function getAI(): GoogleGenAI | null {
   dotenv.config({ path: envPath, override: true });
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
-  return new GoogleGenAI({
-    apiKey: key,
-    httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-  });
+  if (!process.env.GEMINI_API_KEY) return null;
+  return new GoogleGenAI();
 }
 
 interface ChatPayload {
