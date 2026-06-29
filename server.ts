@@ -7,11 +7,10 @@ import dotenv from "dotenv";
 const envPath = path.resolve(process.cwd(), ".env");
 dotenv.config({ path: envPath });
 
-// Model preference order: most reliable first (2.5-flash has its own quota bucket
-// and is currently the most available), then quality-descending
+// Model preference order: most reliable first, then quality-descending
 const MODEL_PREFERENCE = [
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
+  "gemini-3.1-flash",
+  "gemini-3.1-pro",
 ];
 
 // Per-model quota exhaustion cache: tracks when each model's quota expires
@@ -155,7 +154,7 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
         });
       }
 
-      const { message, history = [], model = "gemini-2.5-flash" } = req.body;
+      const { message, history = [], model = "gemini-3.1-flash" } = req.body;
 
       if (!message) {
         return res.status(400).json({ error: "Message is required" });
@@ -219,8 +218,8 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
   app.get("/api/models", (_req, res) => {
     res.json({
       models: [
-        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Latest balanced — best availability" },
-        { id: "gemini-2.5-pro",   label: "Gemini 2.5 Pro",   description: "Most capable, slower" },
+        { id: "gemini-3.1-flash", label: "Gemini 3.1 Flash", description: "Latest balanced — best availability" },
+        { id: "gemini-3.1-pro",   label: "Gemini 3.1 Pro",   description: "Most capable, slower" },
       ],
     });
   });
