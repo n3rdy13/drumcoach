@@ -40,7 +40,7 @@ function parseRetryMs(errorMsg: string): number {
 function getAI(): GoogleGenAI | null {
   dotenv.config({ path: envPath, override: true });
   if (!process.env.GEMINI_API_KEY) return null;
-  return new GoogleGenAI();
+  return new GoogleGenAI({});
 }
 
 interface ChatPayload {
@@ -247,6 +247,13 @@ Keep responses concise, clear, and focused on technique. Avoid overly verbose ex
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  // Global error handler — always returns JSON so the frontend never gets an HTML error page
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("Unhandled server error:", err);
+    res.setHeader("Content-Type", "application/json");
+    res.status(500).json({ error: err?.message || "An unexpected server error occurred." });
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Express server running on http://localhost:${PORT}`);
